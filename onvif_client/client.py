@@ -7,7 +7,6 @@ from onvif import ONVIFCamera
 from typing import Optional, Dict, Any, List
 import logging
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
