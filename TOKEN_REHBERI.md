@@ -35,10 +35,11 @@ curl -X GET http://localhost:8081/api/onvif/media/video-sources
 ### 2. Profile Token Almak
 
 ```bash
-# GetProfiles endpoint'ini çağırın veya GetVideoEncoderConfigurations'ı kontrol edin
+# Profil bilgilerini almak için GetVideoEncoderConfigurations'ı çağırın
 curl -X GET http://localhost:8081/api/onvif/media/encoder-configurations
 
-# Yanıt, konfigürasyon nesnelerinde profile token'ları içerir
+# Yanıt, konfigürasyon nesnelerinde token'ları içerir
+# Not: Gelecek sürümlerde özel bir GetProfiles endpoint'i eklenebilir
 ```
 
 ### 3. Preset Token Almak

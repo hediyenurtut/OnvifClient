@@ -124,6 +124,8 @@ onvif.camera.password=admin
 onvif.camera.service-path=/onvif/device_service
 \`\`\`
 
+**Important:** Proper camera configuration is required before you can obtain tokens from the device. Ensure your camera is accessible at the configured host and port, and that the credentials are correct.
+
 ## SOAP 1.2 Protocol
 
 This client uses SOAP 1.2 protocol as specified in the ONVIF standard. All requests are sent with:
@@ -173,10 +175,11 @@ curl -X GET http://localhost:8081/api/onvif/media/video-sources
 #### 2. Getting Profile Tokens
 
 ```bash
-# Call GetProfiles endpoint (when implemented) or check GetVideoEncoderConfigurations
+# Call GetVideoEncoderConfigurations to get profile information
 curl -X GET http://localhost:8081/api/onvif/media/encoder-configurations
 
-# Response includes profile tokens in configuration objects
+# Response includes tokens in configuration objects
+# Note: A dedicated GetProfiles endpoint may be added in future versions
 ```
 
 #### 3. Getting Preset Tokens
