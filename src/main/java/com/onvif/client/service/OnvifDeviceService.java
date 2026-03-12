@@ -1,9 +1,10 @@
 package com.onvif.client.service;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.onvif.client.config.OnvifConfig;
 import com.onvif.client.model.device.*;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.http.*;
@@ -14,10 +15,10 @@ import java.util.List;
  * ONVIF Device Management Service Client
  * Handles device-level operations using SOAP 1.2
  */
-@Slf4j
 @Service
 @RequiredArgsConstructor
 public class OnvifDeviceService {
+    private static final Logger log = LoggerFactory.getLogger(OnvifDeviceService.class);
 
     private final OnvifConfig onvifConfig;
     private final RestTemplate restTemplate = new RestTemplate();

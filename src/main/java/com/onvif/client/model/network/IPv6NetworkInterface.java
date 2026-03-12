@@ -4,20 +4,19 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 import jakarta.xml.bind.annotation.*;
-import java.util.List;
 
 /**
- * ONVIF IPv6 Configuration
+ * ONVIF IPv6 Network Interface
  */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @XmlAccessorType(XmlAccessType.FIELD)
-public class IPv6Configuration {
+public class IPv6NetworkInterface {
     
-    @XmlElement(name = "Manual")
-    private List<String> manual;
+    @XmlElement(name = "Enabled")
+    private boolean enabled;
     
-    @XmlElement(name = "DHCP")
-    private boolean dhcp;
+    @XmlElement(name = "Config")
+    private IPv6Configuration config;
 }

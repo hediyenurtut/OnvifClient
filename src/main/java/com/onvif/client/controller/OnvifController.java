@@ -1,4 +1,6 @@
 package com.onvif.client.controller;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.onvif.client.model.device.*;
 import com.onvif.client.model.network.*;
@@ -7,7 +9,7 @@ import com.onvif.client.model.media.*;
 import com.onvif.client.model.imaging.*;
 import com.onvif.client.service.*;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -17,11 +19,11 @@ import java.util.List;
  * REST Controller for ONVIF Client Operations
  * Provides endpoints to interact with ONVIF cameras
  */
-@Slf4j
 @RestController
 @RequestMapping("/api/onvif")
 @RequiredArgsConstructor
 public class OnvifController {
+    private static final Logger log = LoggerFactory.getLogger(OnvifController.class);
 
     private final OnvifDeviceService deviceService;
     private final OnvifNetworkService networkService;
@@ -39,10 +41,10 @@ public class OnvifController {
     }
     
     @GetMapping("/device/services")
-    public ResponseEntity<List<Service>> getServices(
+    public ResponseEntity<List<com.onvif.client.model.device.Service>> getServices(
             @RequestParam(defaultValue = "true") boolean includeCapability) {
         log.info("GET /api/onvif/device/services?includeCapability={}", includeCapability);
-        List<Service> services = deviceService.getServices(includeCapability);
+        List<com.onvif.client.model.device.Service> services = deviceService.getServices(includeCapability);
         return ResponseEntity.ok(services);
     }
     
