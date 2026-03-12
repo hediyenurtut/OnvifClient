@@ -1,220 +1,111 @@
-# OnvifClient
+# ONVIF Profile T Client
 
-A simple and easy-to-use Python ONVIF client for controlling IP cameras.
+Java Spring Boot ONVIF Profile T client for controlling IP cameras using SOAP 1.2 protocol.
 
 ## Overview
 
-OnvifClient is a Python library that provides a simple interface to interact with ONVIF-compliant IP cameras. It supports basic camera operations including:
-
-- Device discovery and connection
-- Retrieving device information
-- Getting media profiles and stream URIs
-- PTZ (Pan-Tilt-Zoom) control
-- Camera capabilities detection
+This is a comprehensive ONVIF Profile T client implementation designed to work with ONVIF-compliant IP cameras. It uses Spring Boot and Apache CXF for SOAP 1.2 communication with camera devices.
 
 ## Features
 
-- ✅ Easy camera connection with IP, port, username, and password
-- ✅ Retrieve device information (manufacturer, model, firmware, etc.)
-- ✅ Get media profiles and RTSP stream URIs
-- ✅ PTZ control support (if camera supports it)
-- ✅ Camera capabilities detection
-- ✅ Comprehensive error handling and logging
-- ✅ Simple and intuitive API
+### Device Management
+- ✅ GetServices - Retrieve available ONVIF services
+- ✅ GetServiceCapabilities - Get service capabilities
+- ✅ GetHostName - Get device hostname
+- ✅ SetHostName - Set device hostname
+- ✅ GetDeviceInformation - Get device manufacturer, model, firmware info
+
+### Network Configuration
+- ✅ GetNetworkInterfaces - Retrieve network interface configurations
+- ✅ SetNetworkInterfaces - Configure network interfaces
+- ✅ GetNetworkDefaultGateway - Get default gateway settings
+- ✅ SetNetworkDefaultGateway - Configure default gateway
+
+### PTZ Control
+- ✅ Move - Absolute PTZ movement
+- ✅ ContinuousMove - Continuous PTZ movement
+- ✅ Stop - Stop PTZ movement
+- ✅ GetStatus - Get current PTZ status
+- ✅ SetHomePosition - Set home position
+- ✅ GotoHomePosition - Go to home position
+- ✅ GetPresets - Get PTZ presets
+- ✅ SetPresets - Set PTZ presets
+- ✅ GotoPreset - Go to specific preset
+- ✅ RemovePreset - Remove preset
+- ✅ GetMoveOptions - Get PTZ configuration options
+
+### Media Operations
+- ✅ GetVideoSources - Get available video sources
+- ✅ GetVideoEncoderConfigurations - Get video encoder configurations
+- ✅ AddConfiguration - Add media configuration
+- ✅ H.264 Encoding/Decoding support
+- ✅ H.265 Encoding/Decoding support
+
+### Imaging Operations
+- ✅ GetImageSettings - Get image settings (brightness, contrast, etc.)
+- ✅ SetImageSettings - Configure image settings
+- ✅ GetOptions - Get available imaging options
+
+## Technology Stack
+
+- **Java 17**
+- **Spring Boot 3.2.3**
+- **Apache CXF 4.0.3** - SOAP 1.2 support
+- **Lombok** - Reduce boilerplate code
+- **Maven** - Dependency management
 
 ## Installation
 
-### From Source
+### Prerequisites
+- Java 17 or higher
+- Maven 3.6+
+- ONVIF-compliant IP camera
 
-```bash
+### Build the Project
+
+\`\`\`bash
 git clone https://github.com/hediyenurtut/OnvifClient.git
 cd OnvifClient
-pip install -r requirements.txt
-```
+mvn clean install
+\`\`\`
 
-### Using pip (after publishing)
+### Run the Application
 
-```bash
-pip install onvif-client
-```
+\`\`\`bash
+mvn spring-boot:run
+\`\`\`
 
-## Requirements
+The application will start on port 8081.
 
-- Python 3.7+
-- onvif-zeep >= 0.2.12
-- zeep >= 4.2.1
-- requests >= 2.31.0
+## Configuration
 
-## Quick Start
+Edit \`src/main/resources/application.properties\`:
 
-### Basic Usage
+\`\`\`properties
+# ONVIF Camera Configuration
+onvif.camera.host=192.168.1.100
+onvif.camera.port=8080
+onvif.camera.username=admin
+onvif.camera.password=admin
+onvif.camera.service-path=/onvif/device_service
+\`\`\`
 
-```python
-from onvif_client import ONVIFClient
+## SOAP 1.2 Protocol
 
-# Create client instance
-client = ONVIFClient(
-    ip="192.168.1.100",
-    port=80,
-    username="admin",
-    password="admin"
-)
+This client uses SOAP 1.2 protocol as specified in the ONVIF standard. All requests are sent with:
+- Content-Type: \`application/soap+xml; charset=utf-8\`
+- SOAP Envelope namespace: \`http://www.w3.org/2003/05/soap-envelope\`
 
-# Connect to camera
-if client.connect():
-    # Get device information
-    device_info = client.get_device_info()
-    print(f"Camera Model: {device_info['model']}")
-    print(f"Firmware: {device_info['firmware_version']}")
-    
-    # Get stream URI
-    stream_uri = client.get_stream_uri()
-    print(f"RTSP Stream: {stream_uri}")
-```
+## H.264 and H.265 Support
 
-### PTZ Control
+The client includes models for both H.264 and H.265 video encoding configurations:
+- H.264 Configuration (Main, Baseline, High profiles)
+- H.265 Configuration (Main profile)
 
-```python
-from onvif_client import ONVIFClient
-import time
+## Integration with OnvifServer
 
-client = ONVIFClient("192.168.1.100", 80, "admin", "admin")
-client.connect()
-
-# Pan right
-client.move_ptz(pan=0.5, tilt=0.0, zoom=0.0)
-time.sleep(2)
-client.stop_ptz()
-
-# Zoom in
-client.move_ptz(pan=0.0, tilt=0.0, zoom=0.5)
-time.sleep(2)
-client.stop_ptz()
-```
-
-## API Reference
-
-### ONVIFClient
-
-#### `__init__(ip: str, port: int, username: str, password: str)`
-
-Initialize the ONVIF client.
-
-**Parameters:**
-- `ip` (str): Camera IP address
-- `port` (int): ONVIF port (usually 80, 8080, or 8899)
-- `username` (str): Camera username
-- `password` (str): Camera password
-
-#### `connect() -> bool`
-
-Connect to the ONVIF camera.
-
-**Returns:**
-- `bool`: True if connection successful, False otherwise
-
-#### `get_device_info() -> Optional[Dict[str, Any]]`
-
-Get camera device information.
-
-**Returns:**
-- `dict`: Device information including manufacturer, model, firmware version, serial number, and hardware ID
-
-#### `get_profiles() -> Optional[List[Any]]`
-
-Get available media profiles from the camera.
-
-**Returns:**
-- `list`: List of media profiles
-
-#### `get_stream_uri(profile_token: Optional[str] = None) -> Optional[str]`
-
-Get RTSP stream URI for a media profile.
-
-**Parameters:**
-- `profile_token` (str, optional): Media profile token (uses first profile if not specified)
-
-**Returns:**
-- `str`: RTSP stream URI
-
-#### `get_capabilities() -> Optional[Dict[str, Any]]`
-
-Get camera capabilities.
-
-**Returns:**
-- `dict`: Camera capabilities (analytics, device, events, imaging, media, ptz)
-
-#### `move_ptz(pan: float = 0.0, tilt: float = 0.0, zoom: float = 0.0) -> bool`
-
-Move PTZ camera.
-
-**Parameters:**
-- `pan` (float): Pan value (-1.0 to 1.0)
-- `tilt` (float): Tilt value (-1.0 to 1.0)
-- `zoom` (float): Zoom value (-1.0 to 1.0)
-
-**Returns:**
-- `bool`: True if successful, False otherwise
-
-#### `stop_ptz() -> bool`
-
-Stop PTZ movement.
-
-**Returns:**
-- `bool`: True if successful, False otherwise
-
-## Examples
-
-Check the `examples/` directory for more comprehensive examples:
-
-- `basic_usage.py` - Basic camera connection and information retrieval
-- `ptz_control.py` - PTZ control demonstration
-
-## ONVIF Profiles
-
-This client supports ONVIF Profile S, which includes:
-- Video streaming
-- PTZ control
-- Media configuration
-- Device management
-
-## Troubleshooting
-
-### Connection Issues
-
-1. **Verify camera IP and port**: Make sure the camera is accessible on the network
-2. **Check credentials**: Ensure username and password are correct
-3. **Firewall**: Check if firewall is blocking the connection
-4. **ONVIF support**: Verify that your camera supports ONVIF protocol
-
-### PTZ Not Working
-
-1. **Check capabilities**: Use `get_capabilities()` to verify PTZ support
-2. **Camera model**: Some cameras don't support PTZ
-3. **Profile**: Ensure the media profile supports PTZ
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
+This client is designed to work seamlessly with the [hediyenurtut/OnvifServer](https://github.com/hediyenurtut/OnvifServer) project.
 
 ## License
 
 MIT License
-
-## Acknowledgments
-
-Built with [onvif-zeep](https://github.com/FalkTannhaeuser/python-onvif-zeep) library.
-
-## Support
-
-For issues and questions, please open an issue on GitHub.
-
-## Roadmap
-
-- [ ] Device discovery (WS-Discovery)
-- [ ] Event handling and subscriptions
-- [ ] Snapshot capture
-- [ ] Audio support
-- [ ] Advanced PTZ presets
-- [ ] Recording management
-- [ ] Analytics support
