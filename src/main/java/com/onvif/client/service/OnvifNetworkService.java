@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.http.*;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -152,9 +153,74 @@ public class OnvifNetworkService {
      * Parse Network Interfaces from response
      */
     private List<NetworkInterface> parseNetworkInterfaces(String response) {
-        // Simplified parsing
         log.debug("Parsing network interfaces from response");
-        return List.of();
+        List<NetworkInterface> interfaces = new ArrayList<>();
+        String normalized = normalizeXml(response);
+        List<String> ifaceBlocks = extractAllBlocks(normalized, "NetworkInterfaces");
+        for (String block : ifaceBlocks) {
+            NetworkInterface iface = new NetworkInterface();
+            iface.setToken(extractAttributeValue(block, "token"));
+            iface.setEnabled(Boolean.parseBoolean(extractValue(block, "Enabled")));
+
+            String infoBlock = extractBlock(block, "Info");
+            if (!infoBlock.isEmpty()) {
+                NetworkInterfaceInfo info = new NetworkInterfaceInfo();
+                info.setName(extractValue(infoBlock, "Name"));
+                info.setHwAddress(extractValue(infoBlock, "HwAddress"));
+                info.setMtu(parseInt(infoBlock, "MTU"));
+                iface.setInfo(info);
+            }
+
+            String ipv4Block = extractBlock(block, "IPv4");
+            if (!ipv4Block.isEmpty()) {
+                IPv4NetworkInterface ipv4Iface = new IPv4NetworkInterface();
+                ipv4Iface.setEnabled(Boolean.parseBoolean(extractValue(ipv4Block, "Enabled")));
+
+                String configBlock = extractBlock(ipv4Block, "Config");
+                if (!configBlock.isEmpty()) {
+                    IPv4Configuration config = new IPv4Configuration();
+                    config.setDhcp(Boolean.parseBoolean(extractValue(configBlock, "DHCP")));
+
+                    List<String> manualBlocks = extractAllBlocks(configBlock, "Manual");
+                    List<PrefixedIPv4Address> manualAddresses = new ArrayList<>();
+                    for (String manualBlock : manualBlocks) {
+                        PrefixedIPv4Address addr = new PrefixedIPv4Address();
+                        addr.setAddress(extractValue(manualBlock, "Address"));
+                        addr.setPrefixLength(parseInt(manualBlock, "PrefixLength"));
+                        manualAddresses.add(addr);
+                    }
+                    config.setManual(manualAddresses);
+
+                    String fromDhcpBlock = extractBlock(configBlock, "FromDHCP");
+                    if (!fromDhcpBlock.isEmpty()) {
+                        PrefixedIPv4Address fromDhcp = new PrefixedIPv4Address();
+                        fromDhcp.setAddress(extractValue(fromDhcpBlock, "Address"));
+                        fromDhcp.setPrefixLength(parseInt(fromDhcpBlock, "PrefixLength"));
+                        config.setFromDHCP(fromDhcp);
+                    }
+
+                    ipv4Iface.setConfig(config);
+                }
+                iface.setIpv4(ipv4Iface);
+            }
+
+            String ipv6Block = extractBlock(block, "IPv6");
+            if (!ipv6Block.isEmpty()) {
+                IPv6NetworkInterface ipv6Iface = new IPv6NetworkInterface();
+                ipv6Iface.setEnabled(Boolean.parseBoolean(extractValue(ipv6Block, "Enabled")));
+
+                String configBlock = extractBlock(ipv6Block, "Config");
+                if (!configBlock.isEmpty()) {
+                    IPv6Configuration config = new IPv6Configuration();
+                    config.setDhcp(Boolean.parseBoolean(extractValue(configBlock, "DHCP")));
+                    ipv6Iface.setConfig(config);
+                }
+                iface.setIpv6(ipv6Iface);
+            }
+
+            interfaces.add(iface);
+        }
+        return interfaces;
     }
     
     /**
@@ -182,5 +248,105 @@ public class OnvifNetworkService {
         if (end == -1) return "";
         
         return xml.substring(start, end).trim();
+    }
+
+    /**
+     * Extract inner content of the first matching block for tagName
+     */
+    private String extractBlock(String xml, String tagName) {
+        String startTag = "<" + tagName;
+        String endTag = "</" + tagName + ">";
+
+        int start = xml.indexOf(startTag);
+        if (start == -1) return "";
+
+        int afterName = start + startTag.length();
+        if (afterName < xml.length()) {
+            char next = xml.charAt(afterName);
+            if (next != '>' && next != ' ' && next != '/') return "";
+        }
+
+        int tagClose = xml.indexOf(">", start);
+        if (tagClose == -1) return "";
+
+        if (tagClose > start + 1 && xml.charAt(tagClose - 1) == '/') return "";
+
+        int end = xml.indexOf(endTag, tagClose);
+        if (end == -1) return "";
+
+        return xml.substring(tagClose + 1, end).trim();
+    }
+
+    /**
+     * Extract all blocks matching tagName, returning each full element (start tag + content + end tag)
+     */
+    private List<String> extractAllBlocks(String xml, String tagName) {
+        List<String> blocks = new ArrayList<>();
+        String startTag = "<" + tagName;
+        String endTag = "</" + tagName + ">";
+
+        int pos = 0;
+        while (pos < xml.length()) {
+            int start = xml.indexOf(startTag, pos);
+            if (start == -1) break;
+
+            int afterName = start + startTag.length();
+            if (afterName < xml.length()) {
+                char next = xml.charAt(afterName);
+                if (next != '>' && next != ' ' && next != '/') {
+                    pos = start + 1;
+                    continue;
+                }
+            }
+
+            int tagClose = xml.indexOf(">", start);
+            if (tagClose == -1) break;
+
+            if (tagClose > start + 1 && xml.charAt(tagClose - 1) == '/') {
+                pos = tagClose + 1;
+                continue;
+            }
+
+            int end = xml.indexOf(endTag, tagClose);
+            if (end == -1) break;
+
+            blocks.add(xml.substring(start, end + endTag.length()));
+            pos = end + endTag.length();
+        }
+        return blocks;
+    }
+
+    /**
+     * Extract attribute value from a single XML tag string
+     */
+    private String extractAttributeValue(String xml, String attrName) {
+        String pattern = attrName + "=\"";
+        int start = xml.indexOf(pattern);
+        if (start == -1) return "";
+        start += pattern.length();
+        int end = xml.indexOf("\"", start);
+        if (end == -1) return "";
+        return xml.substring(start, end);
+    }
+
+    /**
+     * Remove XML namespace prefixes for simplified parsing
+     */
+    private String normalizeXml(String xml) {
+        return xml
+            .replaceAll("<([a-zA-Z][a-zA-Z0-9]*):", "<")
+            .replaceAll("</([a-zA-Z][a-zA-Z0-9]*):", "</");
+    }
+
+    /**
+     * Parse integer value from XML
+     */
+    private int parseInt(String xml, String tagName) {
+        String value = extractValue(xml, tagName);
+        try {
+            return value.isEmpty() ? 0 : Integer.parseInt(value);
+        } catch (NumberFormatException e) {
+            return 0;
+        }
     }
 }

@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.http.*;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -46,7 +47,7 @@ public class OnvifDeviceService {
     /**
      * Get Services
      */
-    public List<Service> getServices(boolean includeCapability) {
+    public List<com.onvif.client.model.device.Service> getServices(boolean includeCapability) {
         log.info("Sending GetServices request");
         
         String body = String.format(
@@ -164,19 +165,79 @@ public class OnvifDeviceService {
     /**
      * Parse Services from SOAP response
      */
-    private List<Service> parseServices(String response) {
-        // Simplified parsing - in production, use proper XML parsing
+    private List<com.onvif.client.model.device.Service> parseServices(String response) {
         log.debug("Parsing services from response");
-        return List.of();
+        List<com.onvif.client.model.device.Service> services = new ArrayList<>();
+        String normalized = normalizeXml(response);
+        List<String> serviceBlocks = extractAllBlocks(normalized, "Service");
+        for (String block : serviceBlocks) {
+            com.onvif.client.model.device.Service service = new com.onvif.client.model.device.Service();
+            service.setNamespace(extractValue(block, "Namespace"));
+            service.setXAddr(extractValue(block, "XAddr"));
+
+            String versionBlock = extractBlock(block, "Version");
+            if (!versionBlock.isEmpty()) {
+                ServiceVersion version = new ServiceVersion();
+                version.setMajor(parseInt(versionBlock, "Major"));
+                version.setMinor(parseInt(versionBlock, "Minor"));
+                service.setVersion(version);
+            }
+
+            services.add(service);
+        }
+        return services;
     }
-    
+
     /**
      * Parse Service Capabilities from SOAP response
      */
     private ServiceCapabilities parseServiceCapabilities(String response) {
-        // Simplified parsing - in production, use proper XML parsing
         log.debug("Parsing service capabilities from response");
-        return new ServiceCapabilities();
+        ServiceCapabilities capabilities = new ServiceCapabilities();
+        String normalized = normalizeXml(response);
+
+        int networkIdx = normalized.indexOf("<Network");
+        if (networkIdx != -1) {
+            int networkEnd = normalized.indexOf(">", networkIdx);
+            if (networkEnd != -1) {
+                String networkTag = normalized.substring(networkIdx, networkEnd + 1);
+                NetworkCapabilities network = new NetworkCapabilities();
+                network.setIpFilter(Boolean.parseBoolean(extractAttributeValue(networkTag, "IPFilter")));
+                network.setZeroConfiguration(Boolean.parseBoolean(extractAttributeValue(networkTag, "ZeroConfiguration")));
+                network.setIpVersion6(Boolean.parseBoolean(extractAttributeValue(networkTag, "IPVersion6")));
+                network.setDynDNS(Boolean.parseBoolean(extractAttributeValue(networkTag, "DynDNS")));
+                capabilities.setNetwork(network);
+            }
+        }
+
+        int securityIdx = normalized.indexOf("<Security");
+        if (securityIdx != -1) {
+            int securityEnd = normalized.indexOf(">", securityIdx);
+            if (securityEnd != -1) {
+                String securityTag = normalized.substring(securityIdx, securityEnd + 1);
+                SecurityCapabilities security = new SecurityCapabilities();
+                security.setTls11(Boolean.parseBoolean(extractAttributeValue(securityTag, "TLS1.1")));
+                security.setTls12(Boolean.parseBoolean(extractAttributeValue(securityTag, "TLS1.2")));
+                security.setOnboardKeyGeneration(Boolean.parseBoolean(extractAttributeValue(securityTag, "OnboardKeyGeneration")));
+                capabilities.setSecurity(security);
+            }
+        }
+
+        int systemIdx = normalized.indexOf("<System");
+        if (systemIdx != -1) {
+            int systemEnd = normalized.indexOf(">", systemIdx);
+            if (systemEnd != -1) {
+                String systemTag = normalized.substring(systemIdx, systemEnd + 1);
+                SystemCapabilities system = new SystemCapabilities();
+                system.setDiscoveryResolve(Boolean.parseBoolean(extractAttributeValue(systemTag, "DiscoveryResolve")));
+                system.setDiscoveryBye(Boolean.parseBoolean(extractAttributeValue(systemTag, "DiscoveryBye")));
+                system.setRemoteDiscovery(Boolean.parseBoolean(extractAttributeValue(systemTag, "RemoteDiscovery")));
+                system.setSystemBackup(Boolean.parseBoolean(extractAttributeValue(systemTag, "SystemBackup")));
+                capabilities.setSystem(system);
+            }
+        }
+
+        return capabilities;
     }
     
     /**
@@ -204,5 +265,105 @@ public class OnvifDeviceService {
         if (end == -1) return "";
         
         return xml.substring(start, end).trim();
+    }
+
+    /**
+     * Extract inner content of the first matching block for tagName
+     */
+    private String extractBlock(String xml, String tagName) {
+        String startTag = "<" + tagName;
+        String endTag = "</" + tagName + ">";
+
+        int start = xml.indexOf(startTag);
+        if (start == -1) return "";
+
+        int afterName = start + startTag.length();
+        if (afterName < xml.length()) {
+            char next = xml.charAt(afterName);
+            if (next != '>' && next != ' ' && next != '/') return "";
+        }
+
+        int tagClose = xml.indexOf(">", start);
+        if (tagClose == -1) return "";
+
+        if (tagClose > start + 1 && xml.charAt(tagClose - 1) == '/') return "";
+
+        int end = xml.indexOf(endTag, tagClose);
+        if (end == -1) return "";
+
+        return xml.substring(tagClose + 1, end).trim();
+    }
+
+    /**
+     * Extract all blocks matching tagName, returning each full element (start tag + content + end tag)
+     */
+    private List<String> extractAllBlocks(String xml, String tagName) {
+        List<String> blocks = new ArrayList<>();
+        String startTag = "<" + tagName;
+        String endTag = "</" + tagName + ">";
+
+        int pos = 0;
+        while (pos < xml.length()) {
+            int start = xml.indexOf(startTag, pos);
+            if (start == -1) break;
+
+            int afterName = start + startTag.length();
+            if (afterName < xml.length()) {
+                char next = xml.charAt(afterName);
+                if (next != '>' && next != ' ' && next != '/') {
+                    pos = start + 1;
+                    continue;
+                }
+            }
+
+            int tagClose = xml.indexOf(">", start);
+            if (tagClose == -1) break;
+
+            if (tagClose > start + 1 && xml.charAt(tagClose - 1) == '/') {
+                pos = tagClose + 1;
+                continue;
+            }
+
+            int end = xml.indexOf(endTag, tagClose);
+            if (end == -1) break;
+
+            blocks.add(xml.substring(start, end + endTag.length()));
+            pos = end + endTag.length();
+        }
+        return blocks;
+    }
+
+    /**
+     * Extract attribute value from a single XML tag string
+     */
+    private String extractAttributeValue(String xml, String attrName) {
+        String pattern = attrName + "=\"";
+        int start = xml.indexOf(pattern);
+        if (start == -1) return "";
+        start += pattern.length();
+        int end = xml.indexOf("\"", start);
+        if (end == -1) return "";
+        return xml.substring(start, end);
+    }
+
+    /**
+     * Remove XML namespace prefixes for simplified parsing
+     */
+    private String normalizeXml(String xml) {
+        return xml
+            .replaceAll("<([a-zA-Z][a-zA-Z0-9]*):", "<")
+            .replaceAll("</([a-zA-Z][a-zA-Z0-9]*):", "</");
+    }
+
+    /**
+     * Parse integer value from XML
+     */
+    private int parseInt(String xml, String tagName) {
+        String value = extractValue(xml, tagName);
+        try {
+            return value.isEmpty() ? 0 : Integer.parseInt(value);
+        } catch (NumberFormatException e) {
+            return 0;
+        }
     }
 }

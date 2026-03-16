@@ -166,9 +166,43 @@ public class OnvifImagingService {
      * Parse Options from response
      */
     private ImagingOptions parseOptions(String response) {
-        // Simplified parsing
         log.debug("Parsing imaging options from response");
-        return new ImagingOptions();
+        ImagingOptions options = new ImagingOptions();
+        String normalized = normalizeXml(response);
+
+        String brightnessBlock = extractBlock(normalized, "Brightness");
+        if (!brightnessBlock.isEmpty()) {
+            FloatRange brightness = new FloatRange();
+            brightness.setMin(parseFloatElement(brightnessBlock, "Min"));
+            brightness.setMax(parseFloatElement(brightnessBlock, "Max"));
+            options.setBrightness(brightness);
+        }
+
+        String colorSaturationBlock = extractBlock(normalized, "ColorSaturation");
+        if (!colorSaturationBlock.isEmpty()) {
+            FloatRange colorSaturation = new FloatRange();
+            colorSaturation.setMin(parseFloatElement(colorSaturationBlock, "Min"));
+            colorSaturation.setMax(parseFloatElement(colorSaturationBlock, "Max"));
+            options.setColorSaturation(colorSaturation);
+        }
+
+        String contrastBlock = extractBlock(normalized, "Contrast");
+        if (!contrastBlock.isEmpty()) {
+            FloatRange contrast = new FloatRange();
+            contrast.setMin(parseFloatElement(contrastBlock, "Min"));
+            contrast.setMax(parseFloatElement(contrastBlock, "Max"));
+            options.setContrast(contrast);
+        }
+
+        String sharpnessBlock = extractBlock(normalized, "Sharpness");
+        if (!sharpnessBlock.isEmpty()) {
+            FloatRange sharpness = new FloatRange();
+            sharpness.setMin(parseFloatElement(sharpnessBlock, "Min"));
+            sharpness.setMax(parseFloatElement(sharpnessBlock, "Max"));
+            options.setSharpness(sharpness);
+        }
+
+        return options;
     }
     
     /**
@@ -187,7 +221,55 @@ public class OnvifImagingService {
         
         return xml.substring(start, end).trim();
     }
+
+    /**
+     * Extract inner content of the first matching block for tagName
+     */
+    private String extractBlock(String xml, String tagName) {
+        String startTag = "<" + tagName;
+        String endTag = "</" + tagName + ">";
+
+        int start = xml.indexOf(startTag);
+        if (start == -1) return "";
+
+        int afterName = start + startTag.length();
+        if (afterName < xml.length()) {
+            char next = xml.charAt(afterName);
+            if (next != '>' && next != ' ' && next != '/') return "";
+        }
+
+        int tagClose = xml.indexOf(">", start);
+        if (tagClose == -1) return "";
+
+        if (tagClose > start + 1 && xml.charAt(tagClose - 1) == '/') return "";
+
+        int end = xml.indexOf(endTag, tagClose);
+        if (end == -1) return "";
+
+        return xml.substring(tagClose + 1, end).trim();
+    }
+
+    /**
+     * Remove XML namespace prefixes for simplified parsing
+     */
+    private String normalizeXml(String xml) {
+        return xml
+            .replaceAll("<([a-zA-Z][a-zA-Z0-9]*):", "<")
+            .replaceAll("</([a-zA-Z][a-zA-Z0-9]*):", "</");
+    }
     
+    /**
+     * Parse float value from XML element (used by parseOptions)
+     */
+    private float parseFloatElement(String xml, String tagName) {
+        String value = extractValue(xml, tagName);
+        try {
+            return value.isEmpty() ? 0.0f : Float.parseFloat(value);
+        } catch (NumberFormatException e) {
+            return 0.0f;
+        }
+    }
+
     /**
      * Parse float value from XML
      */
