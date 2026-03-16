@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.http.*;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -120,17 +121,236 @@ public class OnvifMediaService {
      * Parse Video Sources from response
      */
     private List<VideoSource> parseVideoSources(String response) {
-        // Simplified parsing
         log.debug("Parsing video sources from response");
-        return List.of();
+        List<VideoSource> sources = new ArrayList<>();
+        String normalized = normalizeXml(response);
+        List<String> sourceBlocks = extractAllBlocks(normalized, "VideoSources");
+        for (String block : sourceBlocks) {
+            VideoSource source = new VideoSource();
+            source.setToken(extractAttributeValue(block, "token"));
+            source.setFramerate(parseFloat(block, "Framerate"));
+
+            String resBlock = extractBlock(block, "Resolution");
+            if (!resBlock.isEmpty()) {
+                VideoResolution resolution = new VideoResolution();
+                resolution.setWidth(parseInt(resBlock, "Width"));
+                resolution.setHeight(parseInt(resBlock, "Height"));
+                source.setResolution(resolution);
+            }
+
+            String imagingBlock = extractBlock(block, "Imaging");
+            if (!imagingBlock.isEmpty()) {
+                ImagingSettings imaging = new ImagingSettings();
+                imaging.setBrightness(parseFloat(imagingBlock, "Brightness"));
+                imaging.setColorSaturation(parseFloat(imagingBlock, "ColorSaturation"));
+                imaging.setContrast(parseFloat(imagingBlock, "Contrast"));
+                imaging.setSharpness(parseFloat(imagingBlock, "Sharpness"));
+                source.setImaging(imaging);
+            }
+
+            sources.add(source);
+        }
+        return sources;
     }
-    
+
     /**
      * Parse Video Encoder Configurations from response
      */
     private List<VideoEncoderConfiguration> parseVideoEncoderConfigurations(String response) {
-        // Simplified parsing
         log.debug("Parsing video encoder configurations from response");
-        return List.of();
+        List<VideoEncoderConfiguration> configurations = new ArrayList<>();
+        String normalized = normalizeXml(response);
+        List<String> configBlocks = extractAllBlocks(normalized, "Configurations");
+        for (String block : configBlocks) {
+            VideoEncoderConfiguration config = new VideoEncoderConfiguration();
+            config.setToken(extractAttributeValue(block, "token"));
+            config.setName(extractValue(block, "Name"));
+            config.setUseCount(parseInt(block, "UseCount"));
+            config.setEncoding(extractValue(block, "Encoding"));
+            config.setQuality(parseFloat(block, "Quality"));
+            config.setSessionTimeout(extractValue(block, "SessionTimeout"));
+
+            String resBlock = extractBlock(block, "Resolution");
+            if (!resBlock.isEmpty()) {
+                VideoResolution resolution = new VideoResolution();
+                resolution.setWidth(parseInt(resBlock, "Width"));
+                resolution.setHeight(parseInt(resBlock, "Height"));
+                config.setResolution(resolution);
+            }
+
+            String rateBlock = extractBlock(block, "RateControl");
+            if (!rateBlock.isEmpty()) {
+                VideoRateControl rateControl = new VideoRateControl();
+                rateControl.setFrameRateLimit(parseInt(rateBlock, "FrameRateLimit"));
+                rateControl.setEncodingInterval(parseInt(rateBlock, "EncodingInterval"));
+                rateControl.setBitrateLimit(parseInt(rateBlock, "BitrateLimit"));
+                config.setRateControl(rateControl);
+            }
+
+            String h264Block = extractBlock(block, "H264");
+            if (!h264Block.isEmpty()) {
+                H264Configuration h264 = new H264Configuration();
+                h264.setGovLength(parseInt(h264Block, "GovLength"));
+                h264.setH264Profile(extractValue(h264Block, "H264Profile"));
+                config.setH264(h264);
+            }
+
+            String h265Block = extractBlock(block, "H265");
+            if (!h265Block.isEmpty()) {
+                H265Configuration h265 = new H265Configuration();
+                h265.setGovLength(parseInt(h265Block, "GovLength"));
+                h265.setH265Profile(extractValue(h265Block, "H265Profile"));
+                config.setH265(h265);
+            }
+
+            String multicastBlock = extractBlock(block, "Multicast");
+            if (!multicastBlock.isEmpty()) {
+                MulticastConfiguration multicast = new MulticastConfiguration();
+                multicast.setPort(parseInt(multicastBlock, "Port"));
+                multicast.setTtl(parseInt(multicastBlock, "TTL"));
+                multicast.setAutoStart(Boolean.parseBoolean(extractValue(multicastBlock, "AutoStart")));
+                String addressBlock = extractBlock(multicastBlock, "Address");
+                if (!addressBlock.isEmpty()) {
+                    IPAddress address = new IPAddress();
+                    address.setType(extractValue(addressBlock, "Type"));
+                    address.setIpv4Address(extractValue(addressBlock, "IPv4Address"));
+                    address.setIpv6Address(extractValue(addressBlock, "IPv6Address"));
+                    multicast.setAddress(address);
+                }
+                config.setMulticast(multicast);
+            }
+
+            configurations.add(config);
+        }
+        return configurations;
+    }
+
+    /**
+     * Extract value from XML response
+     */
+    private String extractValue(String xml, String tagName) {
+        String startTag = "<" + tagName + ">";
+        String endTag = "</" + tagName + ">";
+
+        int start = xml.indexOf(startTag);
+        if (start == -1) return "";
+
+        start += startTag.length();
+        int end = xml.indexOf(endTag, start);
+        if (end == -1) return "";
+
+        return xml.substring(start, end).trim();
+    }
+
+    /**
+     * Extract inner content of the first matching block for tagName
+     */
+    private String extractBlock(String xml, String tagName) {
+        String startTag = "<" + tagName;
+        String endTag = "</" + tagName + ">";
+
+        int start = xml.indexOf(startTag);
+        if (start == -1) return "";
+
+        int afterName = start + startTag.length();
+        if (afterName < xml.length()) {
+            char next = xml.charAt(afterName);
+            if (next != '>' && next != ' ' && next != '/') return "";
+        }
+
+        int tagClose = xml.indexOf(">", start);
+        if (tagClose == -1) return "";
+
+        if (tagClose > start + 1 && xml.charAt(tagClose - 1) == '/') return "";
+
+        int end = xml.indexOf(endTag, tagClose);
+        if (end == -1) return "";
+
+        return xml.substring(tagClose + 1, end).trim();
+    }
+
+    /**
+     * Extract all blocks matching tagName, returning each full element (start tag + content + end tag)
+     */
+    private List<String> extractAllBlocks(String xml, String tagName) {
+        List<String> blocks = new ArrayList<>();
+        String startTag = "<" + tagName;
+        String endTag = "</" + tagName + ">";
+
+        int pos = 0;
+        while (pos < xml.length()) {
+            int start = xml.indexOf(startTag, pos);
+            if (start == -1) break;
+
+            int afterName = start + startTag.length();
+            if (afterName < xml.length()) {
+                char next = xml.charAt(afterName);
+                if (next != '>' && next != ' ' && next != '/') {
+                    pos = start + 1;
+                    continue;
+                }
+            }
+
+            int tagClose = xml.indexOf(">", start);
+            if (tagClose == -1) break;
+
+            if (tagClose > start + 1 && xml.charAt(tagClose - 1) == '/') {
+                pos = tagClose + 1;
+                continue;
+            }
+
+            int end = xml.indexOf(endTag, tagClose);
+            if (end == -1) break;
+
+            blocks.add(xml.substring(start, end + endTag.length()));
+            pos = end + endTag.length();
+        }
+        return blocks;
+    }
+
+    /**
+     * Extract attribute value from a single XML tag string
+     */
+    private String extractAttributeValue(String xml, String attrName) {
+        String pattern = attrName + "=\"";
+        int start = xml.indexOf(pattern);
+        if (start == -1) return "";
+        start += pattern.length();
+        int end = xml.indexOf("\"", start);
+        if (end == -1) return "";
+        return xml.substring(start, end);
+    }
+
+    /**
+     * Remove XML namespace prefixes for simplified parsing
+     */
+    private String normalizeXml(String xml) {
+        return xml
+            .replaceAll("<([a-zA-Z][a-zA-Z0-9]*):", "<")
+            .replaceAll("</([a-zA-Z][a-zA-Z0-9]*):", "</");
+    }
+
+    /**
+     * Parse integer value from XML
+     */
+    private int parseInt(String xml, String tagName) {
+        String value = extractValue(xml, tagName);
+        try {
+            return value.isEmpty() ? 0 : Integer.parseInt(value);
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
+    /**
+     * Parse float value from XML
+     */
+    private float parseFloat(String xml, String tagName) {
+        String value = extractValue(xml, tagName);
+        try {
+            return value.isEmpty() ? 0.0f : Float.parseFloat(value);
+        } catch (NumberFormatException e) {
+            return 0.0f;
+        }
     }
 }
