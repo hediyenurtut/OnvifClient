@@ -56,6 +56,53 @@ public class OnvifMediaService {
     }
     
     /**
+     * Get all media profiles configured on the device.
+     *
+     * @return list of {@link Profile} objects, each containing at least a token and name
+     * @throws RuntimeException if the SOAP request fails
+     */
+    public List<Profile> getProfiles() {
+        log.info("Sending GetProfiles request");
+
+        String soapRequest = buildSoapRequest("GetProfiles", "");
+        String response = sendSoapRequest(soapRequest);
+
+        log.debug("GetProfiles response: {}", response);
+        return parseProfiles(response);
+    }
+
+    /**
+     * Get the RTSP stream URI for the given media profile.
+     * Builds a GetStreamUri SOAP request using RTP-Unicast over RTSP as the stream setup.
+     *
+     * @param profileToken the token of the media profile to retrieve the stream URI for; must not be null or empty
+     * @return {@link StreamUriResponse} containing the URI string
+     * @throws IllegalArgumentException if profileToken is null or empty
+     * @throws RuntimeException if the SOAP request fails
+     */
+    public StreamUriResponse getStreamUri(String profileToken) {
+        if (profileToken == null || profileToken.isBlank()) {
+            throw new IllegalArgumentException("profileToken must not be null or empty");
+        }
+        log.info("Sending GetStreamUri request for profile: {}", profileToken);
+
+        String body = String.format(
+            "<trt:StreamSetup>" +
+            "<tt:Stream>RTP-Unicast</tt:Stream>" +
+            "<tt:Transport><tt:Protocol>RTSP</tt:Protocol></tt:Transport>" +
+            "</trt:StreamSetup>" +
+            "<trt:ProfileToken>%s</trt:ProfileToken>",
+            profileToken
+        );
+
+        String soapRequest = buildSoapRequest("GetStreamUri", body);
+        String response = sendSoapRequest(soapRequest);
+
+        log.debug("GetStreamUri response: {}", response);
+        return parseStreamUri(response);
+    }
+
+    /**
      * Add Configuration
      */
     public void addConfiguration(String profileToken, String name, String configurationToken) {
@@ -223,6 +270,45 @@ public class OnvifMediaService {
             configurations.add(config);
         }
         return configurations;
+    }
+
+    /**
+     * Parse Profiles from response
+     */
+    private List<Profile> parseProfiles(String response) {
+        log.debug("Parsing profiles from response");
+        List<Profile> profiles = new ArrayList<>();
+        String normalized = normalizeXml(response);
+        List<String> profileBlocks = extractAllBlocks(normalized, "Profiles");
+        for (String block : profileBlocks) {
+            Profile profile = new Profile();
+            profile.setToken(extractAttributeValue(block, "token"));
+            profile.setName(extractValue(block, "Name"));
+
+            String vsBlock = extractBlock(block, "VideoSourceConfiguration");
+            if (!vsBlock.isEmpty()) {
+                profile.setVideoSourceConfigurationToken(extractAttributeValue(vsBlock, "token"));
+            }
+
+            String vecBlock = extractBlock(block, "VideoEncoderConfiguration");
+            if (!vecBlock.isEmpty()) {
+                profile.setVideoEncoderConfigurationToken(extractAttributeValue(vecBlock, "token"));
+            }
+
+            profiles.add(profile);
+        }
+        return profiles;
+    }
+
+    /**
+     * Parse StreamUri from response
+     */
+    private StreamUriResponse parseStreamUri(String response) {
+        log.debug("Parsing stream URI from response");
+        String normalized = normalizeXml(response);
+        StreamUriResponse result = new StreamUriResponse();
+        result.setUri(extractValue(normalized, "Uri"));
+        return result;
     }
 
     /**
