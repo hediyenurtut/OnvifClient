@@ -207,6 +207,20 @@ public class OnvifController {
         return ResponseEntity.ok(configs);
     }
     
+    @GetMapping("/media/profiles")
+    public ResponseEntity<List<Profile>> getProfiles() {
+        log.info("GET /api/onvif/media/profiles");
+        List<Profile> profiles = mediaService.getProfiles();
+        return ResponseEntity.ok(profiles);
+    }
+
+    @GetMapping("/media/stream-uri")
+    public ResponseEntity<StreamUriResponse> getStreamUri(@RequestParam String profileToken) {
+        log.info("GET /api/onvif/media/stream-uri?profileToken={}", profileToken);
+        StreamUriResponse streamUri = mediaService.getStreamUri(profileToken);
+        return ResponseEntity.ok(streamUri);
+    }
+
     @PostMapping("/media/configuration")
     public ResponseEntity<Void> addConfiguration(
             @RequestParam String profileToken,
